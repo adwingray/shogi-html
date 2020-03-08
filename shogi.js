@@ -15,8 +15,9 @@ var CHOSEN_RADIUS = BLOCK_WIDTH / 4;
 var VALID_MOVE_RADIUS = BLOCK_WIDTH / 6;
 
 function startGame() {
+  document.getElementById("wantUpgrade").hidden = false;
+  document.getElementById("wantUpgradeLabel").hidden = false;
 
-  faction = 0;
   chosenPiece = false;
   availableMoves = false;
   image_names = ["king", "rook", "promoted_rook", "bishop", "promoted_bishop", "goldgeneral", "silvergeneral", "promoted_silvergeneral", "knight", "promoted_knight", "lance", "promoted_lance", "pawn"];
@@ -262,9 +263,6 @@ function updatePieces() {
     } else {
       piece.belong -= 1;
     }
-    if (piece.pos == undefined) {
-      console.log(piece);
-    }
     piece.pos.x = 8 - piece.pos.x;
     piece.pos.y = 8 - piece.pos.y;
   }
@@ -341,14 +339,11 @@ function onMove(e) {
         if (move[0] == tmpBlock[0] && move[1] == tmpBlock[1]) {
           console.log("in available moves")
           inAvailableMoves = true;
-          if (tmpBlock[1] < 3) {
-            chosenPiece.upgraded = true;
-          }
           // eat rival's piece
-          if (board[tmpBlock[0]][tmpBlock[1]]) {
+          if (board[tmpBlock[0]][tmpBlock[1]] && chosenPiece.belong == 0) {
             console.log("eat it");
             var piece = board[tmpBlock[0]][tmpBlock[1]];
-            piece.belong = 3 - faction;
+            piece.belong = 2;
             if (piece.type == "pawn") {
               piece.pos.x = 0;
             } else if (piece.type == "lance") {
@@ -366,10 +361,24 @@ function onMove(e) {
             }
             piece.pos.y = 9;
             piece.upgraded = false;
-          } else {
-
           }
-          board[chosenPiece.pos.x][chosenPiece.pos.y] = 0;
+          if (chosenPiece.belong == 2) {
+            chosenPiece.belong = 0;
+          } else {
+            if (!chosenPiece.upgraded) {
+              if (((chosenPiece.type == "pawn" || chosenPiece.type == "lance") && tmpBlock[1] == 0) || (chosenPiece.type == "knight" && tmpBlock[1] < 2)) {
+                chosenPiece.upgraded = true;
+              }
+              if (chosenPiece.pos.y < 3 || tmpBlock[1] < 3) {
+                //wantUpgrade = document.getElementById("wantUpgrade").checked;
+                if (document.getElementById("wantUpgrade").checked) {
+                  chosenPiece.upgraded = true;
+                  document.getElementById("wantUpgrade").setAttribute("checked", false);
+                }
+              }
+            }
+            board[chosenPiece.pos.x][chosenPiece.pos.y] = 0;
+          }
           chosenPiece.pos.x = tmpBlock[0];
           chosenPiece.pos.y = tmpBlock[1];
           board[tmpBlock[0]][tmpBlock[1]] = chosenPiece;
@@ -393,6 +402,7 @@ function onMove(e) {
     for (const piece of gameData.pieces) {
       if (piece.pos.x == tmpBlock[0] && piece.pos.y == tmpBlock[1] && piece.belong % 2 == 0) {
         chosenPiece = piece;
+        console.log("Select : " + chosenPiece.type);
         updateAvailableMoves(piece);
         break;
       }
@@ -602,7 +612,55 @@ function updateAvailableMoves(piece) {
       }
     }
   } else if (piece.belong == 2) {
-
+    if (piece.type == "pawn") {
+      for (var i = 0 ; i < 9 ; i++) {
+        column = [];
+        for (var j = 1; j < 9 ; j++) {
+          if (board[i][j] && board[i][j].type == "pawn" && board[i][j].belong == 0 && (!board[i][j].upgraded)) {
+            column = [];
+            break;
+          }
+          if (board[i][j] || (board[i][j - 1].type == "king" && board[i][j - 1].belong == 1)) {
+            continue;
+          }
+          column.push([i, j]);
+        }
+        availableMoves = availableMoves.concat(column);
+      }
+    } else if (piece.type == "lance") {
+      for (var i = 0 ; i < 9 ; i++) {
+        column = [];
+        for (var j = 1; j < 9 ; j++) {
+          if (board[i][j]) {
+            continue;
+          }
+          column.push([i, j]);
+        }
+        availableMoves = availableMoves.concat(column);
+      }
+    } else if (piece.type == "knight") {
+      for (var i = 0 ; i < 9 ; i++) {
+        column = [];
+        for (var j = 2; j < 9 ; j++) {
+          if (board[i][j]) {
+            continue;
+          }
+          column.push([i, j]);
+        }
+        availableMoves = availableMoves.concat(column);
+      }
+    } else {
+      for (var i = 0 ; i < 9 ; i++) {
+        column = [];
+        for (var j = 0; j < 9 ; j++) {
+          if (board[i][j]) {
+            continue;
+          }
+          column.push([i, j]);
+        }
+        availableMoves = availableMoves.concat(column);
+      }
+    }
   }
   console.log(availableMoves);
 }
