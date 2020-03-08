@@ -1,14 +1,18 @@
 var CANVAS_WIDTH = 480;
 var CANVAS_HEIGHT = 640;
-var pieces;
 var faction;
 var chosenPiece;
 var availableMoves;
 var images;
 var board;
+var ownerName;
+var myName;
+var gameData = {};
 var BLOCK_WIDTH = CANVAS_WIDTH * 4 / 45;
 var BLOCK_HEIGHT = BLOCK_WIDTH * 85 / 70;
 var START_HEIGHT = CANVAS_HEIGHT / 2 - BLOCK_HEIGHT * 4.5;
+var CHOSEN_RADIUS = BLOCK_WIDTH / 4;
+var VALID_MOVE_RADIUS = BLOCK_WIDTH / 6;
 
 function startGame() {
 
@@ -22,7 +26,7 @@ function startGame() {
     images[name].src = "img/" + name + ".png";
     console.log(images[name]);
   }
-  pieces = [{
+  gameData.pieces = [{
     type : "king",
     pos : {x:4, y:8},
     belong : 0,
@@ -224,6 +228,21 @@ function startGame() {
     upgraded : false
   }];
   board = []
+  updateBoard();
+  gameData.owner = ownerName;
+  // when I'm the challenger
+  if (ownerName != myName) {
+    gameData.challenger = myName;
+    gameData.playerInTurn = myName;
+    uploadGameData();
+  } else { // when I'm the owner
+    gameData.playerInTurn = null;
+  }
+  myGameArea.start();
+}
+
+function updateBoard() {
+  board = []
   for (var i = 0; i < 9; i++) {
     var column = []
     for (var j = 0; j < 9; j++) {
@@ -231,10 +250,56 @@ function startGame() {
     }
     board.push(column);
   }
-  for (const piece of pieces) {
+  for (const piece of gameData.pieces) {
     board[piece.pos.x][piece.pos.y] = piece;
   }
-  myGameArea.start();
+}
+
+function updatePieces() {
+  for (const piece of gameData.pieces) {
+    if (piece.belong % 2 == 0) {
+      piece.belong += 1;
+    } else {
+      piece.belong -= 1;
+    }
+    if (piece.pos == undefined) {
+      console.log(piece);
+    }
+    piece.pos.x = 8 - piece.pos.x;
+    piece.pos.y = 8 - piece.pos.y;
+  }
+}
+
+function uploadGameData() {
+  axios({
+    url : "/room/" + ownerName,
+    method : "post",
+    baseURL : "http://icecream.zisen.online:5000",
+    headers : {"Content-Type" : "application/json"},
+    data : gameData
+  }).then(function (response) {
+    return response.data == "Received"
+  });
+}
+
+function downloadGameDataAndUpdate() {
+  axios({
+    url : "/room/" + ownerName,
+    method : "get",
+    baseURL : "http://icecream.zisen.online:5000",
+    //headers : {"Content-Type" : "application/json"},
+    // data : {
+    //   "owner" : "adwin"
+    // }
+  }).then(function (response) {
+    console.log(response.data);
+
+    if (response.data.playerInTurn && response.data.playerInTurn == myName) {
+      gameData = response.data;
+      updatePieces();
+      updateBoard();
+    }
+  });
 }
 
 var myGameArea = {
@@ -263,11 +328,11 @@ var myGameArea = {
   }
 }
 
-function uploadBoard() {
-
-}
 
 function onMove(e) {
+  if (gameData.playerInTurn != myName) {
+    return false;
+  }
   tmpBlock = chooseBlockByCoordinates(e.pageX, e.pageY);
   var inAvailableMoves = false;
   if (chosenPiece) {
@@ -308,38 +373,14 @@ function onMove(e) {
           chosenPiece.pos.x = tmpBlock[0];
           chosenPiece.pos.y = tmpBlock[1];
           board[tmpBlock[0]][tmpBlock[1]] = chosenPiece;
-
-          // if (chosenPiece.belong == 0) {
-          //   for (const piece of pieces) {
-          //     if (move[0] == piece.pos.x && move[1] == piece.pos.y) {
-          //       piece.belong = 3 - faction;
-          //       if (piece.type == "pawn") {
-          //         piece.pos.x = 0;
-          //       } else if (piece.type == "lance") {
-          //         piece.pos.x = 1;
-          //       } else if (piece.type == "knight") {
-          //         piece.pos.x = 2;
-          //       } else if (piece.type == "silvergeneral") {
-          //         piece.pos.x = 3;
-          //       } else if (piece.type == "goldgeneral") {
-          //         piece.pos.x = 4;
-          //       } else if (piece.type == "bishop") {
-          //         piece.pos.x = 5;
-          //       } else if (piece.type == "rook") {
-          //         piece.pos.x = 6;
-          //       }
-          //       piece.pos.y = 9;
-          //       piece.upgraded = false;
-          //       break;
-          //     }
-          //   }
-          //   board[chosenPiece.pos.x][chosenPiece.pos.y] = 0;
-          // }
-
-
-
           chosenPiece = false;
           availableMoves = [];
+          if (gameData.playerInTurn == gameData.owner) {
+            gameData.playerInTurn = gameData.challenger;
+          } else {
+            gameData.playerInTurn = gameData.owner;
+          }
+          uploadGameData();
           break;
         }
       }
@@ -349,7 +390,7 @@ function onMove(e) {
   if (!inAvailableMoves) {
     chosenPiece = false;
     availableMoves = [];
-    for (const piece of pieces) {
+    for (const piece of gameData.pieces) {
       if (piece.pos.x == tmpBlock[0] && piece.pos.y == tmpBlock[1] && piece.belong % 2 == 0) {
         chosenPiece = piece;
         updateAvailableMoves(piece);
@@ -357,22 +398,6 @@ function onMove(e) {
       }
     }
   }
-}
-
-function arraysEqual(a, b) {
-  if (a === b) return true;
-  if (a == null || b == null) return false;
-  if (a.length != b.length) return false;
-
-  // If you don't care about the order of the elements inside
-  // the array, you should sort both arrays here.
-  // Please note that calling sort on an array will modify that array.
-  // you might want to clone your array first.
-
-  for (var i = 0; i < a.length; ++i) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
 }
 
 function chooseBlockByCoordinates(x, y) {
@@ -582,10 +607,21 @@ function updateAvailableMoves(piece) {
   console.log(availableMoves);
 }
 
+var downloadCounter = 5;
 function updateGameArea() {
+  downloadCounter -= 1;
+  console.log("Current Player:" + gameData.playerInTurn);
+  if (downloadCounter == 0) {
+    downloadCounter = 5;
+    if (gameData.playerInTurn != myName) {
+      console.log("Try to download game data");
+      downloadGameDataAndUpdate();
+    }
+  }
+  // draw
   myGameArea.clear();
   ctx = myGameArea.context;
-  for (const piece of pieces) {
+  for (const piece of gameData.pieces) {
     var name = "";
     if (piece.upgraded) {
       //ctx.drawImage(images["promoted_" + piece.type], piece.pos.x * BLOCK_WIDTH, piece.pos.y * BLOCK_HEIGHT + START_HEIGHT, BLOCK_WIDTH, BLOCK_HEIGHT);
@@ -611,7 +647,32 @@ function updateGameArea() {
     ctx.fillRect(i * BLOCK_WIDTH - BLOCK_WIDTH / 14, START_HEIGHT - BLOCK_WIDTH / 14, BLOCK_WIDTH / 7, BLOCK_HEIGHT * 9);
     ctx.fillRect(0, START_HEIGHT + i * BLOCK_HEIGHT - BLOCK_WIDTH / 14, BLOCK_WIDTH * 9, BLOCK_WIDTH / 7);
   }
+
+  //draw chosen piece
+  if (chosenPiece) {
+    ctx.save();
+    ctx.StrokeStyle = "red";
+    ctx.lineWith = 5;
+    ctx.beginPath();
+    ctx.arc((chosenPiece.pos.x + 0.5) * BLOCK_WIDTH, START_HEIGHT + (chosenPiece.pos.y + 0.5) * BLOCK_HEIGHT, CHOSEN_RADIUS, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.fillStyle = "green";
+    for (const move of availableMoves) {
+      ctx.beginPath();
+      ctx.arc((move[0] + 0.5) * BLOCK_WIDTH, START_HEIGHT + (move[1] + 0.5) * BLOCK_HEIGHT, VALID_MOVE_RADIUS, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
 }
 
 
-startGame()
+//startGame()
+document.getElementById("startGame").addEventListener("click", function (e) {
+  myName = document.getElementById("myName").value;
+  ownerName = document.getElementById("ownerName").value;
+  if (myName && ownerName) {
+    startGame();
+  }
+});
